@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NotiCGR – Tablón de noticias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v16l-6-4-6 4z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="M20 11l-8 8a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+
+<!-- Barra superior (solo tablet y móvil) -->
+<header class="topbar">
+  <a class="brand" href="#"><span class="mark"></span>NotiCGR</a>
+  <button class="ghost" id="mtoggle" aria-expanded="false" aria-controls="aside">
+    <svg class="i"><use href="#i-search"/></svg>Buscar y filtrar
+  </button>
+</header>
+
+<!-- Panel de control (izquierda). Cambia cada href="#" por la página real cuando exista. -->
+<nav class="side" id="nav" aria-label="Panel de control">
+  <a class="brand" href="#"><span class="mark"></span>NotiCGR</a>
+  <ul>
+    <li><a class="nav" href="#" data-view="all" aria-current="page"><svg class="i"><use href="#i-news"/></svg><span class="lbl">Todas las noticias</span><span class="badge" id="n-all">0</span></a></li>
+    <li><a class="nav" href="#" data-view="upload"><svg class="i"><use href="#i-upload"/></svg><span class="lbl">Subir noticia</span></a></li>
+    <li><a class="nav" href="#" data-view="edit"><svg class="i"><use href="#i-edit"/></svg><span class="lbl">Editar noticia</span></a></li>
+    <li><a class="nav" href="#" data-view="settings"><svg class="i"><use href="#i-gear"/></svg><span class="lbl">Configuración</span></a></li>
+    <li class="sep"><a class="nav" href="#" data-view="saved"><svg class="i"><use href="#i-bookmark"/></svg><span class="lbl">Guardadas</span><span class="badge" id="n-saved">0</span></a></li>
+  </ul>
+  <p class="note">Sin cuenta por ahora: publicas como Anónimo y tus noticias quedan guardadas en este navegador.</p>
+</nav>
+
+<div class="app">
+  <main>
+    <!-- Publicar -->
+    <section class="composer" id="composer" aria-label="Publicar una noticia">
+      <div class="av" aria-hidden="true">A</div>
+      <div>
+        <textarea id="text" maxlength="500" rows="3" placeholder="¿Qué noticia quieres compartir? Usa #etiquetas para agrupar temas."></textarea>
+        <div class="fchip" id="fchip">
+          <span class="ic">PDF</span><span class="fname" id="fname"></span>
+          <button class="x" id="fremove" aria-label="Quitar PDF"><svg class="i"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="cbar">
+          <button class="ghost" id="attach" type="button"><svg class="i"><use href="#i-clip"/></svg>Adjuntar PDF</button>
+          <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+          <select class="ghost" id="pcat" aria-label="Categoría"></select>
+          <span class="sp"></span>
+          <span class="cnt" id="cnt" title="Caracteres restantes">500</span>
+          <button class="btn" id="pub" disabled>Publicar</button>
+        </div>
+        <p class="hint">PDF de una sola hoja, máximo 2 MB. Ctrl + Enter para publicar.</p>
+      </div>
+    </section>
+
+    <!-- Tablón -->
+    <div class="fh"><h1 id="title">Últimas noticias</h1><span id="count"></span></div>
+    <div id="feed" aria-live="polite"></div>
+  </main>
+
+  <!-- Búsqueda y filtros (derecha) -->
+  <aside class="aside" id="aside" aria-label="Búsqueda y filtros">
+    <label class="search">
+      <svg class="i"><use href="#i-search"/></svg>
+      <input id="q" type="search" placeholder="Buscar noticias, temas o PDF" autocomplete="off">
+    </label>
+    <section class="panel">
+      <div class="ph"><h2>Categorías</h2><button class="link" id="reset">Limpiar todo</button></div>
+      <div class="chips" id="chips"></div>
+    </section>
+    <section class="panel">
+      <h2>Ordenar y mostrar</h2>
+      <div class="seg" id="sort" role="group" aria-label="Orden">
+        <button data-sort="new" aria-pressed="true">Recientes</button>
+        <button data-sort="top" aria-pressed="false">Más apoyadas</button>
+      </div>
+      <label class="check"><input type="checkbox" id="onlypdf"> Solo con PDF adjunto</label>
+    </section>
+    <section class="panel">
+      <h2>Temas del momento</h2>
+      <div id="topics"></div>
+    </section>
+  </aside>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

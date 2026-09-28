@@ -1,0 +1,168 @@
+/* NotiCGR – lógica del dashboard (sin backend por ahora: usa localStorage) */
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const CATS = { General: 200, Política: 350, Economía: 150, Justicia: 265, Regional: 30, Tecnología: 215 };
+  const KEY = 'noticgr.posts.v1', MAX_PDF = 2 * 1024 * 1024, HR = 3.6e6;
+  const TAG = /#[\p{L}\d_]+/gu;
+  const S = { q: '', cat: '', sort: 'new', pdf: false, saved: false, file: null };
+  let freshId = '', tt;
+
+  const seed = () => [
+    { id: 's1', cat: 'Regional', t: Date.now() - .5 * HR, likes: 24, text: 'Abren inscripciones para las veedurías ciudadanas de la región Caribe. El plazo cierra el 15 de octubre y la participación es gratuita. #Veedurías #Regional' },
+    { id: 's2', cat: 'Economía', t: Date.now() - 2 * HR, likes: 17, text: 'Ya está disponible para consulta pública el informe trimestral de ejecución presupuestal. Adjunto el resumen en una hoja. #Presupuesto #Transparencia', file: { name: 'resumen-ejecucion.pdf', size: 48200, url: '' } },
+    { id: 's3', cat: 'Justicia', t: Date.now() - 5 * HR, likes: 12, text: 'La audiencia pública de seguimiento a los contratos de infraestructura será el próximo jueves a las 9:00 a. m. #Audiencia #Contratación' },
+    { id: 's4', cat: 'Tecnología', t: Date.now() - 26 * HR, likes: 31, text: 'Nuevo portal de datos abiertos: los conjuntos de datos ya se pueden descargar en formato CSV. #DatosAbiertos' },
+    { id: 's5', cat: 'General', t: Date.now() - 50 * HR, likes: 8, text: 'Bienvenidos a NotiCGR. Publica sin cuenta, adjunta un PDF de una hoja y filtra por tema. #Bienvenida' }
+  ];
+  const load = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(v)) return v; } catch {} return seed(); };
+  let posts = load();
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(posts)); } catch { toast('No se pudo guardar en este navegador. Prueba con un PDF más liviano.'); } };
+
+  /* ---------- utilidades ---------- */
+  const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const size = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+  const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
+  const ago = t => {
+    const m = Math.round((Date.now() - t) / 6e4);
+    if (m < 1) return 'justo ahora';
+    if (m < 60) return rtf.format(-m, 'minute');
+    const h = Math.round(m / 60);
+    return h < 24 ? rtf.format(-h, 'hour') : rtf.format(-Math.round(h / 24), 'day');
+  };
+  function toast(m) {
+    const t = $('#toast'); t.textContent = m; t.classList.add('on');
+    clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2800);
+  }
+
+  /* ---------- tablón ---------- */
+  const body = t => esc(t).replace(TAG, x => `<button class="tag" data-act="tag" data-t="${x}">${x}</button>`);
+  const pdf = f => {
+    const open = f.url ? `<a class="pdf" href="${f.url}" download="${esc(f.name)}" target="_blank" rel="noopener">` : '<div class="pdf">';
+    return open + `<span class="ic">PDF</span><span><b>${esc(f.name)}</b><br><small>1 hoja, ${size(f.size)}</small></span><span class="go">${f.url ? 'Abrir' : 'Ejemplo'}</span>` + (f.url ? '</a>' : '</div>');
+  };
+  const card = p => `<article class="post${p.id === freshId ? ' new' : ''}" data-id="${p.id}">
+    <div class="av" aria-hidden="true">A</div>
+    <div class="pb">
+      <header><b>Anónimo</b><span class="cat" style="--h:${CATS[p.cat] ?? 200}">${p.cat}</span><time datetime="${new Date(p.t).toISOString()}">${ago(p.t)}</time></header>
+      <p>${body(p.text)}</p>${p.file ? pdf(p.file) : ''}
+      <div class="acts">
+        <button data-act="like" aria-pressed="${!!p.liked}" aria-label="Apoyar"><svg class="i"><use href="#i-heart"/></svg>${p.likes}</button>
+        <button data-act="save" aria-pressed="${!!p.saved}"><svg class="i"><use href="#i-bookmark"/></svg>${p.saved ? 'Guardada' : 'Guardar'}</button>
+        <button data-act="share"><svg class="i"><use href="#i-share"/></svg>Copiar texto</button>
+        ${p.mine ? '<button class="del" data-act="del" aria-label="Eliminar noticia"><svg class="i"><use href="#i-trash"/></svg></button>' : ''}
+      </div>
+    </div></article>`;
+
+  function view() {
+    const q = S.q.trim().toLowerCase();
+    return posts
+      .filter(p => (!S.cat || p.cat === S.cat) && (!S.pdf || p.file) && (!S.saved || p.saved) &&
+        (!q || `${p.text} ${p.cat} ${p.file ? p.file.name : ''}`.toLowerCase().includes(q)))
+      .sort((a, b) => S.sort === 'top' ? b.likes - a.likes || b.t - a.t : b.t - a.t);
+  }
+  function render() {
+    const list = view();
+    $('#feed').innerHTML = list.length ? list.map(card).join('')
+      : '<div class="empty"><b>No hay noticias con estos filtros.</b><span>Quita algún filtro o publica la primera sobre este tema.</span></div>';
+    $('#count').textContent = `${list.length} ${list.length === 1 ? 'noticia' : 'noticias'}`;
+    $('#title').textContent = S.saved ? 'Guardadas' : 'Últimas noticias';
+    $('#n-all').textContent = posts.length;
+    $('#n-saved').textContent = posts.filter(p => p.saved).length;
+    $('#chips').innerHTML = ['', ...Object.keys(CATS)].map(c =>
+      `<button class="chip" data-cat="${c}" aria-pressed="${S.cat === c}">${c || 'Todas'}<small>${c ? posts.filter(p => p.cat === c).length : posts.length}</small></button>`).join('');
+    const m = {};
+    posts.forEach(p => (p.text.match(TAG) || []).forEach(t => { (m[t.toLowerCase()] ||= { t, n: 0 }).n++; }));
+    const top = Object.values(m).sort((a, b) => b.n - a.n).slice(0, 6);
+    $('#topics').innerHTML = top.length
+      ? top.map(x => `<button class="topic" data-tag="${x.t}">${x.t}<small>${x.n} ${x.n === 1 ? 'noticia' : 'noticias'}</small></button>`).join('')
+      : '<p class="muted">Aún no hay etiquetas.</p>';
+  }
+  const sortUI = () => document.querySelectorAll('#sort button').forEach(x => x.setAttribute('aria-pressed', x.dataset.sort === S.sort));
+  function resetFilters() {
+    Object.assign(S, { q: '', cat: '', sort: 'new', pdf: false, saved: false });
+    $('#q').value = ''; $('#onlypdf').checked = false; sortUI();
+    setActive($('[data-view=all]'));
+  }
+  function setQ(t) { S.q = t; $('#q').value = t; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+  $('#feed').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const p = posts.find(x => x.id === b.closest('.post').dataset.id), a = b.dataset.act;
+    if (a === 'tag') return setQ(b.dataset.t);
+    if (a === 'like') { p.liked = !p.liked; p.likes += p.liked ? 1 : -1; }
+    if (a === 'save') p.saved = !p.saved;
+    if (a === 'share') return navigator.clipboard?.writeText(p.text).then(() => toast('Texto copiado.'), () => toast('No se pudo copiar el texto.'));
+    if (a === 'del') { if (!confirm('¿Eliminar esta noticia?')) return; posts = posts.filter(x => x !== p); toast('Noticia eliminada.'); }
+    save(); render();
+  });
+
+  /* ---------- filtros ---------- */
+  $('#q').addEventListener('input', e => { S.q = e.target.value; render(); });
+  $('#chips').addEventListener('click', e => { const c = e.target.closest('[data-cat]'); if (c) { S.cat = c.dataset.cat; render(); } });
+  $('#topics').addEventListener('click', e => { const t = e.target.closest('[data-tag]'); if (t) setQ(t.dataset.tag); });
+  $('#sort').addEventListener('click', e => { const b = e.target.closest('[data-sort]'); if (b) { S.sort = b.dataset.sort; sortUI(); render(); } });
+  $('#onlypdf').addEventListener('change', e => { S.pdf = e.target.checked; render(); });
+  $('#reset').addEventListener('click', () => { resetFilters(); render(); });
+  $('#mtoggle').addEventListener('click', e => e.currentTarget.setAttribute('aria-expanded', document.body.classList.toggle('aside-open')));
+
+  /* ---------- panel de control ---------- */
+  function setActive(a) {
+    $('#nav').querySelectorAll('a').forEach(x => x.removeAttribute('aria-current'));
+    a.setAttribute('aria-current', 'page');
+  }
+  $('#nav').addEventListener('click', e => {
+    const a = e.target.closest('a[data-view]');
+    if (!a || a.getAttribute('href') !== '#') return;   // si le pones un href real, navega normal
+    e.preventDefault();
+    const v = a.dataset.view;
+    if (v === 'upload') { window.scrollTo({ top: 0, behavior: 'smooth' }); return $('#text').focus({ preventScroll: true }); }
+    if (v === 'edit' || v === 'settings') return toast(`«${a.querySelector('.lbl').textContent}» todavía no está disponible.`);
+    S.saved = v === 'saved'; setActive(a); render();
+  });
+
+  /* ---------- publicar ---------- */
+  const tx = $('#text'), pub = $('#pub'), cnt = $('#cnt');
+  $('#pcat').innerHTML = Object.keys(CATS).map(c => `<option>${c}</option>`).join('');
+  tx.addEventListener('input', () => {
+    const left = tx.maxLength - tx.value.length;
+    cnt.textContent = left; cnt.classList.toggle('warn', left < 40);
+    pub.disabled = !tx.value.trim();
+  });
+  tx.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') publish(); });
+  pub.addEventListener('click', publish);
+
+  function fileUI() {
+    $('#fchip').classList.toggle('on', !!S.file);
+    if (S.file) $('#fname').textContent = `${S.file.name} (${size(S.file.size)})`;
+  }
+  async function pickPdf(f) {
+    if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') return toast('Solo se aceptan archivos PDF.');
+    if (f.size > MAX_PDF) return toast('El PDF pesa más de 2 MB.');
+    try {
+      const url = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+      // Comprobación aproximada de páginas; la validación definitiva debe hacerse en el servidor.
+      const pages = (atob(url.split(',')[1]).match(/\/Type\s*\/Page(?![s\w])/g) || []).length;
+      if (pages > 1) return toast(`El PDF tiene ${pages} hojas. Sube uno de una sola hoja.`);
+      S.file = { name: f.name, size: f.size, url }; fileUI();
+    } catch { toast('No se pudo leer el archivo.'); }
+  }
+  $('#attach').addEventListener('click', () => $('#file').click());
+  $('#file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) pickPdf(f); });
+  $('#fremove').addEventListener('click', () => { S.file = null; fileUI(); });
+  const box = $('#composer');
+  box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('drag'); });
+  box.addEventListener('dragleave', () => box.classList.remove('drag'));
+  box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drag'); if (e.dataTransfer.files[0]) pickPdf(e.dataTransfer.files[0]); });
+
+  function publish() {
+    const text = tx.value.trim(); if (!text) return;
+    const p = { id: 'p' + Date.now(), text, cat: $('#pcat').value, t: Date.now(), likes: 0, mine: true, file: S.file || undefined };
+    posts.unshift(p); freshId = p.id;
+    S.file = null; fileUI(); tx.value = ''; tx.dispatchEvent(new Event('input'));
+    resetFilters(); save(); render(); toast('Noticia publicada.');
+  }
+
+  tx.dispatchEvent(new Event('input'));
+  render();
+})();

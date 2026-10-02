@@ -8,6 +8,13 @@
   const S = { q: '', cat: '', sort: 'new', pdf: false, saved: false, file: null };
   let freshId = '', tt;
 
+  /* ---------- sesión (ver login.html / auth.js) ---------- */
+  const KEYS = 'noticgr.session', FIRST_MS = 40e3, EVERY_MS = 120e3;   // aviso a invitados: primera vez y repetición
+  let ses = null; try { ses = JSON.parse(localStorage.getItem(KEYS)); } catch {}
+  if (!ses) { location.replace('login.html'); return; }
+  const GUEST = !!ses.guest, ME = ses.user || 'Invitado';
+  document.body.classList.toggle('guest', GUEST);
+
   const seed = () => [
     { id: 's1', cat: 'Regional', t: Date.now() - .5 * HR, likes: 24, text: 'Abren inscripciones para las veedurías ciudadanas de la región Caribe. El plazo cierra el 15 de octubre y la participación es gratuita. #Veedurías #Regional' },
     { id: 's2', cat: 'Economía', t: Date.now() - 2 * HR, likes: 17, text: 'Ya está disponible para consulta pública el informe trimestral de ejecución presupuestal. Adjunto el resumen en una hoja. #Presupuesto #Transparencia', file: { name: 'resumen-ejecucion.pdf', size: 48200, url: '' } },
@@ -42,15 +49,15 @@
     return open + `<span class="ic">PDF</span><span><b>${esc(f.name)}</b><br><small>1 hoja, ${size(f.size)}</small></span><span class="go">${f.url ? 'Abrir' : 'Ejemplo'}</span>` + (f.url ? '</a>' : '</div>');
   };
   const card = p => `<article class="post${p.id === freshId ? ' new' : ''}" data-id="${p.id}">
-    <div class="av" aria-hidden="true">A</div>
+    <div class="av" aria-hidden="true">${esc((p.author || 'R')[0].toUpperCase())}</div>
     <div class="pb">
-      <header><b>Anónimo</b><span class="cat" style="--h:${CATS[p.cat] ?? 200}">${p.cat}</span><time datetime="${new Date(p.t).toISOString()}">${ago(p.t)}</time></header>
+      <header><b>${esc(p.author || 'Redacción')}</b><span class="cat" style="--h:${CATS[p.cat] ?? 200}">${p.cat}</span><time datetime="${new Date(p.t).toISOString()}">${ago(p.t)}</time></header>
       <p>${body(p.text)}</p>${p.file ? pdf(p.file) : ''}
       <div class="acts">
         <button data-act="like" aria-pressed="${!!p.liked}" aria-label="Apoyar"><svg class="i"><use href="#i-heart"/></svg>${p.likes}</button>
         <button data-act="save" aria-pressed="${!!p.saved}"><svg class="i"><use href="#i-bookmark"/></svg>${p.saved ? 'Guardada' : 'Guardar'}</button>
         <button data-act="share"><svg class="i"><use href="#i-share"/></svg>Copiar texto</button>
-        ${p.mine ? '<button class="del" data-act="del" aria-label="Eliminar noticia"><svg class="i"><use href="#i-trash"/></svg></button>' : ''}
+        ${!GUEST && p.author === ME ? '<button class="del" data-act="del" aria-label="Eliminar noticia"><svg class="i"><use href="#i-trash"/></svg></button>' : ''}
       </div>
     </div></article>`;
 
@@ -89,6 +96,7 @@
   $('#feed').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
     const p = posts.find(x => x.id === b.closest('.post').dataset.id), a = b.dataset.act;
+    if (GUEST && (a === 'like' || a === 'save')) return gate('Para apoyar o guardar noticias necesitas una cuenta.');
     if (a === 'tag') return setQ(b.dataset.t);
     if (a === 'like') { p.liked = !p.liked; p.likes += p.liked ? 1 : -1; }
     if (a === 'save') p.saved = !p.saved;
@@ -116,6 +124,7 @@
     if (!a || a.getAttribute('href') !== '#') return;   // si le pones un href real, navega normal
     e.preventDefault();
     const v = a.dataset.view;
+    if (GUEST && (v === 'upload' || v === 'saved')) return gate('Para subir o guardar noticias necesitas una cuenta.');
     if (v === 'upload') { window.scrollTo({ top: 0, behavior: 'smooth' }); return $('#text').focus({ preventScroll: true }); }
     if (v === 'edit' || v === 'settings') return toast(`«${a.querySelector('.lbl').textContent}» todavía no está disponible.`);
     S.saved = v === 'saved'; setActive(a); render();
@@ -156,13 +165,37 @@
   box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drag'); if (e.dataTransfer.files[0]) pickPdf(e.dataTransfer.files[0]); });
 
   function publish() {
+    if (GUEST) return gate('Para publicar necesitas una cuenta.');
     const text = tx.value.trim(); if (!text) return;
-    const p = { id: 'p' + Date.now(), text, cat: $('#pcat').value, t: Date.now(), likes: 0, mine: true, file: S.file || undefined };
+    const p = { id: 'p' + Date.now(), text, cat: $('#pcat').value, t: Date.now(), likes: 0, author: ME, file: S.file || undefined };
     posts.unshift(p); freshId = p.id;
     S.file = null; fileUI(); tx.value = ''; tx.dispatchEvent(new Event('input'));
     resetFilters(); save(); render(); toast('Noticia publicada.');
   }
 
   tx.dispatchEvent(new Event('input'));
+  /* ---------- usuario, invitado y aviso de registro ---------- */
+  $('#me-av').textContent = ME[0].toUpperCase();
+  $('#me-name').textContent = ME;
+  $('#me-role').textContent = GUEST ? 'Invitado' : 'Sesión iniciada';
+  document.querySelectorAll('[data-out]').forEach(b => {
+    b.textContent = GUEST ? 'Ingresar' : 'Salir';
+    b.addEventListener('click', () => { localStorage.removeItem(KEYS); location.href = 'login.html'; });
+  });
+  if (GUEST) { $('#composer').hidden = true; $('#guestbox').hidden = false; }
+
+  const gateEl = $('#gate'); let gateT;
+  const lock = on => ['.side', '.topbar', '.app'].forEach(s => $(s).toggleAttribute('inert', on));   // bloquea todo lo de atrás
+  function gate(msg) {
+    clearTimeout(gateT);
+    $('#gate-msg').textContent = msg || 'Llevas un rato leyendo como invitado. Crea una cuenta gratis para publicar, apoyar y guardar noticias.';
+    gateEl.classList.add('on'); lock(true); $('#gate-go').focus();
+  }
+  $('#gate-guest').addEventListener('click', () => {
+    gateEl.classList.remove('on'); lock(false);
+    gateT = setTimeout(gate, EVERY_MS);
+  });
+  if (GUEST) gateT = setTimeout(gate, FIRST_MS);
+
   render();
 })();

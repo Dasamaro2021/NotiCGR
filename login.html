@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar – NotiCGR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <section class="hero">
+    <a class="brand" href="login.html"><span class="mark"></span>NotiCGR</a>
+    <div>
+      <h1>Las noticias de la comunidad, en un solo tablón.</h1>
+      <p>Publica, adjunta un PDF de una hoja y sigue los temas que te importan.</p>
+    </div>
+  </section>
+
+  <main class="auth-card">
+    <div class="tabs" role="group" aria-label="Acceso">
+      <button id="t-in" aria-selected="true">Iniciar sesión</button>
+      <button id="t-up" aria-selected="false">Crear cuenta</button>
+    </div>
+
+    <form id="f-in" novalidate>
+      <label>Usuario<input name="u" autocomplete="username" required></label>
+      <label>Contraseña<input name="p" type="password" autocomplete="current-password" required></label>
+      <p class="err" role="alert"></p>
+      <button class="btn wide">Entrar</button>
+    </form>
+
+    <form id="f-up" novalidate hidden>
+      <label>Nombre de usuario<small>Es el nombre que verán en tus publicaciones.</small><input name="u" autocomplete="username" required></label>
+      <label>Contraseña<small>Mínimo 6 caracteres.</small><input name="p" type="password" autocomplete="new-password" required></label>
+      <label>Repite la contraseña<input name="p2" type="password" autocomplete="new-password" required></label>
+      <p class="err" role="alert"></p>
+      <button class="btn wide">Crear cuenta</button>
+    </form>
+
+    <button class="ghost wide" id="guest" type="button">Entrar como invitado</button>
+    <p class="small">Como invitado puedes leer el tablón, pero no publicar, apoyar ni guardar noticias.</p>
+  </main>
+</div>
+<script src="auth.js"></script>
+</body>
+</html>

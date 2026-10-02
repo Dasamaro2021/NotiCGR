@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script>try{if(!localStorage.getItem("noticgr.session"))location.replace("login.html")}catch(e){}</script>
 </head>
 <body>
 
@@ -31,6 +32,7 @@
   <button class="ghost" id="mtoggle" aria-expanded="false" aria-controls="aside">
     <svg class="i"><use href="#i-search"/></svg>Buscar y filtrar
   </button>
+  <button class="ghost tb-out" data-out></button>
 </header>
 
 <!-- Panel de control (izquierda). Cambia cada href="#" por la página real cuando exista. -->
@@ -43,7 +45,7 @@
     <li><a class="nav" href="#" data-view="settings"><svg class="i"><use href="#i-gear"/></svg><span class="lbl">Configuración</span></a></li>
     <li class="sep"><a class="nav" href="#" data-view="saved"><svg class="i"><use href="#i-bookmark"/></svg><span class="lbl">Guardadas</span><span class="badge" id="n-saved">0</span></a></li>
   </ul>
-  <p class="note">Sin cuenta por ahora: publicas como Anónimo y tus noticias quedan guardadas en este navegador.</p>
+  <div class="me"><span class="av" id="me-av"></span><div><b id="me-name"></b><small id="me-role"></small></div><button data-out></button></div>
 </nav>
 
 <div class="app">
@@ -67,6 +69,12 @@
         </div>
         <p class="hint">PDF de una sola hoja, máximo 2 MB. Ctrl + Enter para publicar.</p>
       </div>
+    </section>
+
+    <section class="guestbox" id="guestbox" hidden>
+      <span><b>Estás leyendo como invitado.</b> Crea una cuenta para publicar, apoyar y guardar noticias.</span>
+      <a class="btn" href="login.html?modo=registro">Crear cuenta</a>
+      <a class="ghost" href="login.html">Iniciar sesión</a>
     </section>
 
     <!-- Tablón -->
@@ -99,6 +107,15 @@
   </aside>
 </div>
 
+<div id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-t">
+  <div class="gate-card">
+    <h2 id="gate-t">Únete a NotiCGR</h2>
+    <p id="gate-msg"></p>
+    <a class="btn" id="gate-go" href="login.html?modo=registro">Crear cuenta</a>
+    <a class="ghost" href="login.html">Iniciar sesión</a>
+    <button class="link" id="gate-guest" type="button">Seguir como invitado</button>
+  </div>
+</div>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>

@@ -210,3 +210,12 @@ body.guest .acts [data-act=like],body.guest .acts [data-act=save]{opacity:.55}
   .tb-out{display:inline-flex}
   .topbar .brand{margin-right:auto}
 }
+
+/* ---------- Editar noticia ---------- */
+.empty .btn{justify-self:center;margin-top:14px;padding:11px 26px}
+.ed{margin-top:8px}
+.ed textarea{width:100%;min-height:96px;padding:12px;border:1px solid var(--line);border-radius:12px;outline:0;background:var(--paper);font:400 18px/1.55 var(--serif);resize:vertical}
+.ed textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 22%,transparent)}
+.ed .cbar{border:0;padding-top:10px}
+.ed .check{margin:0}
+body.editing .acts [data-act=like],body.editing .acts [data-act=save]{display:none}

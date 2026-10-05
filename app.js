@@ -5,8 +5,8 @@
   const CATS = { General: 200, Política: 350, Economía: 150, Justicia: 265, Regional: 30, Tecnología: 215 };
   const KEY = 'noticgr.posts.v1', MAX_PDF = 2 * 1024 * 1024, HR = 3.6e6;
   const TAG = /#[\p{L}\d_]+/gu;
-  const S = { q: '', cat: '', sort: 'new', pdf: false, saved: false, file: null };
-  let freshId = '', tt;
+  const S = { q: '', cat: '', sort: 'new', pdf: false, saved: false, edit: false, file: null };
+  let freshId = '', editId = '', tt;
 
   /* ---------- sesión (ver login.html / auth.js) ---------- */
   const KEYS = 'noticgr.session', FIRST_MS = 40e3, EVERY_MS = 120e3;   // aviso a invitados: primera vez y repetición
@@ -51,10 +51,10 @@
   const card = p => `<article class="post${p.id === freshId ? ' new' : ''}" data-id="${p.id}">
     <div class="av" aria-hidden="true">${esc((p.author || 'R')[0].toUpperCase())}</div>
     <div class="pb">
-      <header><b>${esc(p.author || 'Redacción')}</b><span class="cat" style="--h:${CATS[p.cat] ?? 200}">${p.cat}</span><time datetime="${new Date(p.t).toISOString()}">${ago(p.t)}</time></header>
-      <p>${body(p.text)}</p>${p.file ? pdf(p.file) : ''}
+      <header><b>${esc(p.author || 'Redacción')}</b><span class="cat" style="--h:${CATS[p.cat] ?? 200}">${p.cat}</span><time datetime="${new Date(p.t).toISOString()}">${ago(p.t)}</time>${p.edited ? '<span class="muted">(editada)</span>' : ''}</header>
+      ${p.id === editId ? editor(p) : `<p>${body(p.text)}</p>${p.file ? pdf(p.file) : ''}`}
       <div class="acts">
-        <button data-act="like" aria-pressed="${!!p.liked}" aria-label="Apoyar"><svg class="i"><use href="#i-heart"/></svg>${p.likes}</button>
+        ${S.edit ? '<button data-act="edit"><svg class="i"><use href="#i-edit"/></svg>Editar</button>' : ''}<button data-act="like" aria-pressed="${!!p.liked}" aria-label="Apoyar"><svg class="i"><use href="#i-heart"/></svg>${p.likes}</button>
         <button data-act="save" aria-pressed="${!!p.saved}"><svg class="i"><use href="#i-bookmark"/></svg>${p.saved ? 'Guardada' : 'Guardar'}</button>
         <button data-act="share"><svg class="i"><use href="#i-share"/></svg>Copiar texto</button>
         ${!GUEST && p.author === ME ? '<button class="del" data-act="del" aria-label="Eliminar noticia"><svg class="i"><use href="#i-trash"/></svg></button>' : ''}
@@ -64,16 +64,20 @@
   function view() {
     const q = S.q.trim().toLowerCase();
     return posts
-      .filter(p => (!S.cat || p.cat === S.cat) && (!S.pdf || p.file) && (!S.saved || p.saved) &&
+      .filter(p => (!S.edit || p.author === ME) && (!S.cat || p.cat === S.cat) && (!S.pdf || p.file) && (!S.saved || p.saved) &&
         (!q || `${p.text} ${p.cat} ${p.file ? p.file.name : ''}`.toLowerCase().includes(q)))
       .sort((a, b) => S.sort === 'top' ? b.likes - a.likes || b.t - a.t : b.t - a.t);
   }
   function render() {
     const list = view();
     $('#feed').innerHTML = list.length ? list.map(card).join('')
+      : S.edit && !posts.some(p => p.author === ME)
+      ? '<div class="empty"><b>Aún no has subido ninguna noticia.</b><span>Cuando publiques una, podrás editarla o eliminarla desde aquí.</span><button class="btn" data-act="new">Crear una nueva noticia</button></div>'
       : '<div class="empty"><b>No hay noticias con estos filtros.</b><span>Quita algún filtro o publica la primera sobre este tema.</span></div>';
     $('#count').textContent = `${list.length} ${list.length === 1 ? 'noticia' : 'noticias'}`;
-    $('#title').textContent = S.saved ? 'Guardadas' : 'Últimas noticias';
+    $('#title').textContent = S.edit ? 'Editar noticia' : S.saved ? 'Guardadas' : 'Últimas noticias';
+    document.body.classList.toggle('editing', S.edit);
+    $('#composer').hidden = GUEST || S.edit;
     $('#n-all').textContent = posts.length;
     $('#n-saved').textContent = posts.filter(p => p.saved).length;
     $('#chips').innerHTML = ['', ...Object.keys(CATS)].map(c =>
@@ -87,16 +91,35 @@
   }
   const sortUI = () => document.querySelectorAll('#sort button').forEach(x => x.setAttribute('aria-pressed', x.dataset.sort === S.sort));
   function resetFilters() {
-    Object.assign(S, { q: '', cat: '', sort: 'new', pdf: false, saved: false });
+    Object.assign(S, { q: '', cat: '', sort: 'new', pdf: false, saved: false, edit: false }); editId = '';
     $('#q').value = ''; $('#onlypdf').checked = false; sortUI();
     setActive($('[data-view=all]'));
+  }
+  const editor = p => `<div class="ed"><textarea id="ed-text" maxlength="500" rows="4">${esc(p.text)}</textarea>
+    <div class="cbar"><select class="ghost" id="ed-cat" aria-label="Categoría">${Object.keys(CATS).map(c => `<option${c === p.cat ? ' selected' : ''}>${c}</option>`).join('')}</select>
+    ${p.file ? '<label class="check"><input type="checkbox" id="ed-rm"> Quitar PDF</label>' : ''}<span class="sp"></span>
+    <button class="ghost" data-act="cancel">Cancelar</button><button class="btn" data-act="update">Guardar cambios</button></div></div>`;
+  function toUpload() {
+    Object.assign(S, { saved: false, edit: false }); editId = '';
+    setActive($('[data-view=all]')); render();
+    window.scrollTo({ top: 0, behavior: 'smooth' }); $('#text').focus({ preventScroll: true });
   }
   function setQ(t) { S.q = t; $('#q').value = t; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
   $('#feed').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
+    if (b.dataset.act === 'new') return toUpload();
     const p = posts.find(x => x.id === b.closest('.post').dataset.id), a = b.dataset.act;
     if (GUEST && (a === 'like' || a === 'save')) return gate('Para apoyar o guardar noticias necesitas una cuenta.');
+    if (a === 'edit') { editId = p.id; render(); return $('#ed-text').focus(); }
+    if (a === 'cancel') { editId = ''; return render(); }
+    if (a === 'update') {
+      const t = $('#ed-text').value.trim();
+      if (!t) return toast('La noticia no puede quedar vacía.');
+      Object.assign(p, { text: t, cat: $('#ed-cat').value, edited: true });
+      if ($('#ed-rm')?.checked) delete p.file;
+      editId = ''; toast('Cambios guardados.');
+    }
     if (a === 'tag') return setQ(b.dataset.t);
     if (a === 'like') { p.liked = !p.liked; p.likes += p.liked ? 1 : -1; }
     if (a === 'save') p.saved = !p.saved;
@@ -124,10 +147,10 @@
     if (!a || a.getAttribute('href') !== '#') return;   // si le pones un href real, navega normal
     e.preventDefault();
     const v = a.dataset.view;
-    if (GUEST && (v === 'upload' || v === 'saved')) return gate('Para subir o guardar noticias necesitas una cuenta.');
-    if (v === 'upload') { window.scrollTo({ top: 0, behavior: 'smooth' }); return $('#text').focus({ preventScroll: true }); }
-    if (v === 'edit' || v === 'settings') return toast(`«${a.querySelector('.lbl').textContent}» todavía no está disponible.`);
-    S.saved = v === 'saved'; setActive(a); render();
+    if (GUEST && (v === 'upload' || v === 'edit' || v === 'saved')) return gate('Para subir, editar o guardar noticias necesitas una cuenta.');
+    if (v === 'upload') return toUpload();
+    if (v === 'settings') return toast(`«${a.querySelector('.lbl').textContent}» todavía no está disponible.`);
+    S.saved = v === 'saved'; S.edit = v === 'edit'; editId = ''; setActive(a); render();
   });
 
   /* ---------- publicar ---------- */

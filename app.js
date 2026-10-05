@@ -1,5 +1,5 @@
 /* NotiCGR – lógica del dashboard (sin backend por ahora: usa localStorage) */
-(() => {
+(async () => {
   'use strict';
   const $ = (s, r = document) => r.querySelector(s);
   const CATS = { General: 200, Política: 350, Economía: 150, Justicia: 265, Regional: 30, Tecnología: 215 };
@@ -8,23 +8,28 @@
   const S = { q: '', cat: '', sort: 'new', pdf: false, saved: false, edit: false, file: null };
   let freshId = '', editId = '', tt;
 
-  /* ---------- sesión (ver login.html / auth.js) ---------- */
-  const KEYS = 'noticgr.session', FIRST_MS = 40e3, EVERY_MS = 120e3;   // aviso a invitados: primera vez y repetición
-  let ses = null; try { ses = JSON.parse(localStorage.getItem(KEYS)); } catch {}
-  if (!ses) { location.replace('login.html'); return; }
-  const GUEST = !!ses.guest, ME = ses.user || 'Invitado';
+  /* ---------- servidor (api.php) y sesión ---------- */
+  const KEYS = 'noticgr.guest', FIRST_MS = 40e3, EVERY_MS = 120e3;   // aviso a invitados: primera vez y repetición
+  async function api(a, data) {
+    const o = { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } };
+    if (data) {
+      o.method = 'POST';
+      if (data instanceof FormData) o.body = data;
+      else { o.body = JSON.stringify(data); o.headers['Content-Type'] = 'application/json'; }
+    }
+    try {
+      const r = await fetch('api.php?a=' + a, o), j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Error del servidor.');
+      return j;
+    } catch (e) { toast(e instanceof TypeError ? 'No hay conexión con el servidor.' : e.message); return null; }
+  }
+  const me = await api('me');
+  const GUEST = !(me && me.user) && !!localStorage.getItem(KEYS);
+  if (!(me && me.user) && !GUEST) { location.replace('login.html'); return; }
+  const ME = (me && me.user) || 'Invitado';
   document.body.classList.toggle('guest', GUEST);
-
-  const seed = () => [
-    { id: 's1', cat: 'Regional', t: Date.now() - .5 * HR, likes: 24, text: 'Abren inscripciones para las veedurías ciudadanas de la región Caribe. El plazo cierra el 15 de octubre y la participación es gratuita. #Veedurías #Regional' },
-    { id: 's2', cat: 'Economía', t: Date.now() - 2 * HR, likes: 17, text: 'Ya está disponible para consulta pública el informe trimestral de ejecución presupuestal. Adjunto el resumen en una hoja. #Presupuesto #Transparencia', file: { name: 'resumen-ejecucion.pdf', size: 48200, url: '' } },
-    { id: 's3', cat: 'Justicia', t: Date.now() - 5 * HR, likes: 12, text: 'La audiencia pública de seguimiento a los contratos de infraestructura será el próximo jueves a las 9:00 a. m. #Audiencia #Contratación' },
-    { id: 's4', cat: 'Tecnología', t: Date.now() - 26 * HR, likes: 31, text: 'Nuevo portal de datos abiertos: los conjuntos de datos ya se pueden descargar en formato CSV. #DatosAbiertos' },
-    { id: 's5', cat: 'General', t: Date.now() - 50 * HR, likes: 8, text: 'Bienvenidos a NotiCGR. Publica sin cuenta, adjunta un PDF de una hoja y filtra por tema. #Bienvenida' }
-  ];
-  const load = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(v)) return v; } catch {} return seed(); };
-  let posts = load();
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(posts)); } catch { toast('No se pudo guardar en este navegador. Prueba con un PDF más liviano.'); } };
+  let posts = (await api('posts')) || [];
+  const refresh = async () => { const r = await api('posts'); if (r) posts = r; render(); };
 
   /* ---------- utilidades ---------- */
   const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -106,26 +111,29 @@
   }
   function setQ(t) { S.q = t; $('#q').value = t; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
-  $('#feed').addEventListener('click', e => {
+  $('#feed').addEventListener('click', async e => {
     const b = e.target.closest('[data-act]'); if (!b) return;
-    if (b.dataset.act === 'new') return toUpload();
-    const p = posts.find(x => x.id === b.closest('.post').dataset.id), a = b.dataset.act;
+    const a = b.dataset.act;
+    if (a === 'new') return toUpload();
+    const p = posts.find(x => x.id == b.closest('.post').dataset.id);
     if (GUEST && (a === 'like' || a === 'save')) return gate('Para apoyar o guardar noticias necesitas una cuenta.');
     if (a === 'edit') { editId = p.id; render(); return $('#ed-text').focus(); }
     if (a === 'cancel') { editId = ''; return render(); }
+    if (a === 'tag') return setQ(b.dataset.t);
+    if (a === 'share') return navigator.clipboard?.writeText(p.text).then(() => toast('Texto copiado.'), () => toast('No se pudo copiar el texto.'));
+    let r;
+    if (a === 'like' || a === 'save') r = await api(a, { id: p.id });
     if (a === 'update') {
       const t = $('#ed-text').value.trim();
       if (!t) return toast('La noticia no puede quedar vacía.');
-      Object.assign(p, { text: t, cat: $('#ed-cat').value, edited: true });
-      if ($('#ed-rm')?.checked) delete p.file;
-      editId = ''; toast('Cambios guardados.');
+      r = await api('update', { id: p.id, text: t, cat: $('#ed-cat').value, rmfile: !!$('#ed-rm')?.checked });
+      if (r) { editId = ''; toast('Cambios guardados.'); }
     }
-    if (a === 'tag') return setQ(b.dataset.t);
-    if (a === 'like') { p.liked = !p.liked; p.likes += p.liked ? 1 : -1; }
-    if (a === 'save') p.saved = !p.saved;
-    if (a === 'share') return navigator.clipboard?.writeText(p.text).then(() => toast('Texto copiado.'), () => toast('No se pudo copiar el texto.'));
-    if (a === 'del') { if (!confirm('¿Eliminar esta noticia?')) return; posts = posts.filter(x => x !== p); toast('Noticia eliminada.'); }
-    save(); render();
+    if (a === 'del') {
+      if (!confirm('¿Eliminar esta noticia?')) return;
+      r = await api('delete', { id: p.id }); if (r) toast('Noticia eliminada.');
+    }
+    if (r) await refresh();
   });
 
   /* ---------- filtros ---------- */
@@ -176,7 +184,7 @@
       // Comprobación aproximada de páginas; la validación definitiva debe hacerse en el servidor.
       const pages = (atob(url.split(',')[1]).match(/\/Type\s*\/Page(?![s\w])/g) || []).length;
       if (pages > 1) return toast(`El PDF tiene ${pages} hojas. Sube uno de una sola hoja.`);
-      S.file = { name: f.name, size: f.size, url }; fileUI();
+      S.file = { name: f.name, size: f.size, blob: f }; fileUI();
     } catch { toast('No se pudo leer el archivo.'); }
   }
   $('#attach').addEventListener('click', () => $('#file').click());
@@ -187,13 +195,16 @@
   box.addEventListener('dragleave', () => box.classList.remove('drag'));
   box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drag'); if (e.dataTransfer.files[0]) pickPdf(e.dataTransfer.files[0]); });
 
-  function publish() {
+  async function publish() {
     if (GUEST) return gate('Para publicar necesitas una cuenta.');
     const text = tx.value.trim(); if (!text) return;
-    const p = { id: 'p' + Date.now(), text, cat: $('#pcat').value, t: Date.now(), likes: 0, author: ME, file: S.file || undefined };
-    posts.unshift(p); freshId = p.id;
-    S.file = null; fileUI(); tx.value = ''; tx.dispatchEvent(new Event('input'));
-    resetFilters(); save(); render(); toast('Noticia publicada.');
+    const fd = new FormData(); fd.append('text', text); fd.append('cat', $('#pcat').value);
+    if (S.file) fd.append('file', S.file.blob);
+    pub.disabled = true;
+    const r = await api('create', fd);
+    if (!r) { pub.disabled = false; return; }
+    freshId = r.id; S.file = null; fileUI(); tx.value = ''; tx.dispatchEvent(new Event('input'));
+    resetFilters(); await refresh(); toast('Noticia publicada.');
   }
 
   tx.dispatchEvent(new Event('input'));
@@ -203,7 +214,7 @@
   $('#me-role').textContent = GUEST ? 'Invitado' : 'Sesión iniciada';
   document.querySelectorAll('[data-out]').forEach(b => {
     b.textContent = GUEST ? 'Ingresar' : 'Salir';
-    b.addEventListener('click', () => { localStorage.removeItem(KEYS); location.href = 'login.html'; });
+    b.addEventListener('click', async () => { await api('logout', {}); localStorage.removeItem(KEYS); location.href = 'login.html'; });
   });
   if (GUEST) { $('#composer').hidden = true; $('#guestbox').hidden = false; }
 
